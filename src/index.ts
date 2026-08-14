@@ -18,6 +18,11 @@ interface PackageJson {
   peerDependencies?: Record<string, string>;
 }
 
+interface PackageAlias {
+  find: string;
+  replacement: string;
+}
+
 type ExternalOption =
   | string
   | RegExp
@@ -33,6 +38,15 @@ function packageName(id: string): string | undefined {
 
 function isStylesheetImport(id: string): boolean {
   return stylesheetImport.test(id.split(/[?#]/, 1)[0] ?? id);
+}
+
+function applyAliases(specifier: string, aliases: PackageAlias[]): string {
+  for (const alias of aliases) {
+    if (specifier === alias.find || specifier.startsWith(`${alias.find}/`)) {
+      return `${alias.replacement}${specifier.slice(alias.find.length)}`;
+    }
+  }
+  return specifier;
 }
 
 function findPackageJson(start: string): string {
@@ -86,8 +100,12 @@ function matchesExternal(option: ExternalOption | undefined, id: string): boolea
  * browser through an import map backed by esm.sh.
  */
 export default function pinestraw(options: PinestrawOptions = {}): Plugin {
-  let imports: Record<string, string> = {};
   let externalPackages = new Set<string>();
+  let packageUrls = new Map<string, string>();
+  let aliases: PackageAlias[] = [];
+  let aliasTargets = new Set<string>();
+  let externalQuery = "";
+  const usedSpecifiers = new Set<string>();
 
   return {
     name: "pinestraw",
@@ -109,12 +127,11 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
       );
 
       const cdn = (options.cdn ?? "https://esm.sh").replace(/\/$/, "");
-      imports = {};
+      packageUrls = new Map();
+      usedSpecifiers.clear();
       for (const name of [...externalPackages].sort()) {
         const version = resolvedVersion(dirname(manifestPath), name, declared[name]!);
-        const url = `${cdn}/${name}@${version}`;
-        imports[name] = url;
-        imports[`${name}/`] = `${url}/`;
+        packageUrls.set(name, `${cdn}/${name}@${version}`);
       }
 
       const existing = config.build?.rollupOptions?.external;
@@ -122,12 +139,13 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
         build: {
           rollupOptions: {
             external(id: string, importer: string | undefined, isResolved: boolean) {
-              const dependency = packageName(id);
+              const dependency = packageName(applyAliases(id, aliases));
               if (
                 dependency &&
                 externalPackages.has(dependency) &&
                 !isStylesheetImport(id)
               ) {
+                usedSpecifiers.add(id);
                 return true;
               }
               if (typeof existing === "function") {
@@ -140,9 +158,49 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
       };
     },
 
+    configResolved(config) {
+      aliases = config.resolve.alias.flatMap((alias) =>
+        typeof alias.find === "string" &&
+        packageName(alias.replacement) &&
+        externalPackages.has(packageName(alias.replacement)!)
+          ? [{ find: alias.find, replacement: alias.replacement }]
+          : [],
+      );
+      aliasTargets = new Set(aliases.map(({ replacement }) => packageName(replacement)!));
+      const externalNames = new Set(
+        aliases.flatMap(({ find, replacement }) => [packageName(find), packageName(replacement)]),
+      );
+      for (const singleton of ["react", "react-dom"]) {
+        if (externalPackages.has(singleton)) externalNames.add(singleton);
+      }
+      externalNames.delete(undefined);
+      externalQuery = externalNames.size
+        ? `?external=${[...externalNames].sort().join(",")}`
+        : "";
+    },
+
     transformIndexHtml: {
-      order: "pre",
+      order: "post",
       handler() {
+        const imports: Record<string, string> = {};
+        for (const specifier of [...usedSpecifiers].sort()) {
+          const target = applyAliases(specifier, aliases);
+          const targetPackage = packageName(target);
+          const baseUrl = targetPackage && packageUrls.get(targetPackage);
+          if (!targetPackage || !baseUrl) continue;
+          imports[specifier] = `${baseUrl}${target.slice(targetPackage.length)}${
+            aliasTargets.has(targetPackage) ? "" : externalQuery
+          }`;
+        }
+        for (const { find, replacement } of aliases) {
+          const targetPackage = packageName(replacement)!;
+          const baseUrl = packageUrls.get(targetPackage)!;
+          const targetUrl = `${baseUrl}${replacement.slice(targetPackage.length)}`;
+          imports[targetPackage] ??= baseUrl;
+          imports[`${targetPackage}/`] ??= `${baseUrl}/`;
+          imports[find] = targetUrl;
+          imports[`${find}/`] = `${targetUrl}/`;
+        }
         if (Object.keys(imports).length === 0) return [];
         return [
           {

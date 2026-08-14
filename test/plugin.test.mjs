@@ -13,7 +13,7 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
     JSON.stringify({
       type: "module",
       dependencies: {
-        react: "^19.0.0",
+        preact: "^10.0.0",
         "react-loading-skeleton": "^3.5.0",
       },
     }),
@@ -26,7 +26,7 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   // Real example from one of my projects I tested it on
   await writeFile(
     join(root, "main.js"),
-    'import React from "react"; import "react-loading-skeleton/dist/skeleton.css"; console.log(React);',
+    'import React from "react"; import { useState } from "preact/hooks"; import Skeleton from "react-loading-skeleton"; import "react-loading-skeleton/dist/skeleton.css"; console.log(React, useState, Skeleton);',
   );
   const skeletonRoot = join(root, "node_modules/react-loading-skeleton");
   await mkdir(join(skeletonRoot, "dist"), { recursive: true });
@@ -39,7 +39,13 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   const previousDirectory = process.cwd();
   try {
     process.chdir(root);
-    await build({ root: ".", configFile: false, logLevel: "silent", plugins: [pinestraw()] });
+    await build({
+      root: ".",
+      configFile: false,
+      logLevel: "silent",
+      resolve: { alias: { react: "preact/compat" } },
+      plugins: [pinestraw()],
+    });
   } finally {
     process.chdir(previousDirectory);
   }
@@ -53,9 +59,12 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   );
 
   assert.match(html, /<script type="importmap" id="pinestraw-imports">/);
-  assert.match(html, /"react":\s*"https:\/\/esm\.sh\/react@\^19\.0\.0"/);
-  assert.match(html, /"react\/":\s*"https:\/\/esm\.sh\/react@\^19\.0\.0\/"/);
+  assert.match(html, /"react":\s*"https:\/\/esm\.sh\/preact@\^10\.0\.0\/compat"/);
+  assert.match(html, /"preact\/hooks":\s*"https:\/\/esm\.sh\/preact@\^10\.0\.0\/hooks"/);
+  assert.doesNotMatch(html, /preact@\^10\.0\.0\/hooks\?external/);
+  assert.match(html, /react-loading-skeleton@3\.5\.0\?external=preact,react/);
   assert.match(js, /from["']react["']/);
+  assert.match(js, /from["']preact\/hooks["']/);
   assert.doesNotMatch(js, /skeleton\.css/);
   assert.match(css, /\.skeleton\{color:red\}/);
 
