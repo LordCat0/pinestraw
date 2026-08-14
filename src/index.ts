@@ -136,7 +136,7 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
         return [
           {
             tag: "script",
-            attrs: { type: "importmap" },
+            attrs: { type: "importmap", id: 'pinestraw-imports' },
             children: JSON.stringify({ imports }, null, 2),
             injectTo: "head-prepend",
           },
