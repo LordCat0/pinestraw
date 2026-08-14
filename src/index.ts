@@ -1,111 +1,34 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { Plugin } from "vite";
+import { createImportMapTag } from "./import-map.js";
+import {
+  applyAliases,
+  getPackageName,
+  isStylesheetImport,
+  matchesExternal,
+} from "./imports.js";
+import {
+  createPackageUrls,
+  findPackageJson,
+  readPackageManifest,
+} from "./package-manifest.js";
+import type { PackageAlias, PinestrawOptions } from "./types.js";
 
-export interface PinestrawOptions {
-  /** Packages to add in addition to the app's dependencies. Values are versions. */
-  include?: Record<string, string>;
-  /** Package names which should still be bundled by Vite. */
-  exclude?: string[];
-  /** Also serve peer dependencies from esm.sh. Defaults to false. */
-  peerDependencies?: boolean;
-  /** Base URL of an esm.sh instance. */
-  cdn?: string;
-}
-
-interface PackageJson {
-  dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-}
-
-interface PackageAlias {
-  find: string;
-  replacement: string;
-}
-
-type ExternalOption =
-  | string
-  | RegExp
-  | readonly (string | RegExp)[]
-  | ((id: string, importer: string | undefined, isResolved: boolean) => boolean | null | undefined);
-
-const bareImport = /^(?![./]|[a-zA-Z][a-zA-Z\d+.-]*:)(@[^/]+\/[^/]+|[^/]+)/;
-const stylesheetImport = /\.(?:css|less|sass|scss|styl|stylus|pcss|postcss)$/i;
-
-function packageName(id: string): string | undefined {
-  return bareImport.exec(id)?.[1];
-}
-
-function isStylesheetImport(id: string): boolean {
-  return stylesheetImport.test(id.split(/[?#]/, 1)[0] ?? id);
-}
-
-function applyAliases(specifier: string, aliases: PackageAlias[]): string {
-  for (const alias of aliases) {
-    if (specifier === alias.find || specifier.startsWith(`${alias.find}/`)) {
-      return `${alias.replacement}${specifier.slice(alias.find.length)}`;
-    }
-  }
-  return specifier;
-}
-
-function findPackageJson(start: string): string {
-  let directory = resolve(start);
-
-  while (true) {
-    const candidate = join(directory, "package.json");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(directory);
-    if (parent === directory) {
-      throw new Error(`[pinestraw] Could not find package.json from ${start}`);
-    }
-    directory = parent;
-  }
-}
-
-function readManifest(path: string): PackageJson {
-  return JSON.parse(readFileSync(path, "utf8")) as PackageJson;
-}
-
-function resolvedVersion(root: string, name: string, declared: string): string {
-  // Prefer a lockfile-installed version so the browser runs the same dependency
-  // that the application was developed and tested against.
-  const packagePath = join(root, "node_modules", ...name.split("/"), "package.json");
-  if (existsSync(packagePath)) {
-    const installed = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: string };
-    if (installed.version) return installed.version;
-  }
-
-  // npm aliases and local/workspace dependencies are not valid esm.sh versions.
-  if (/^(?:file:|link:|workspace:|git(?:\+|:)|https?:|npm:)/.test(declared)) {
-    throw new Error(
-      `[pinestraw] Cannot create an esm.sh URL for ${name}@${declared}. ` +
-        "Install it in node_modules or exclude it.",
-    );
-  }
-  return declared;
-}
-
-function matchesExternal(option: ExternalOption | undefined, id: string): boolean {
-  if (!option) return false;
-  if (typeof option === "function") return Boolean(option(id, undefined, false));
-  const entries = Array.isArray(option) ? option : [option];
-  return entries.some((entry) =>
-    typeof entry === "string" ? entry === id : entry.test(id),
-  );
-}
+export type { PinestrawOptions } from "./types.js";
 
 /**
  * Keeps application dependencies out of Vite's output and resolves them in the
  * browser through an import map backed by esm.sh.
  */
-export default function pinestraw(options: PinestrawOptions = {}): Plugin {
-  let externalPackages = new Set<string>();
+export default function pinestraw(
+  options: PinestrawOptions = {},
+): Plugin {
+  let externalPackageNames = new Set<string>();
   let packageUrls = new Map<string, string>();
   let aliases: PackageAlias[] = [];
-  let aliasTargets = new Set<string>();
+  let aliasTargetNames = new Set<string>();
   let dependencyQuery = "?standalone";
-  const usedSpecifiers = new Set<string>();
+  const usedImportSpecifiers = new Set<string>();
 
   return {
     name: "pinestraw",
@@ -113,45 +36,58 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
     enforce: "pre",
 
     config(config) {
-      const root = resolve(config.root ?? process.cwd());
-      const manifestPath = findPackageJson(root);
-      const manifest = readManifest(manifestPath);
-      const declared = {
+      const projectRoot = resolveProjectRoot(config.root);
+      const manifestPath = findPackageJson(projectRoot);
+      const manifest = readPackageManifest(manifestPath);
+      const declaredDependencies = {
         ...manifest.dependencies,
         ...(options.peerDependencies ? manifest.peerDependencies : {}),
         ...options.include,
       };
-      const excluded = new Set(options.exclude ?? []);
-      externalPackages = new Set(
-        Object.keys(declared).filter((name) => !excluded.has(name)),
+      const excludedPackageNames = new Set(options.exclude ?? []);
+      const externalDependencies = Object.fromEntries(
+        Object.entries(declaredDependencies).filter(
+          ([packageName]) => !excludedPackageNames.has(packageName),
+        ),
       );
 
-      const cdn = (options.cdn ?? "https://esm.sh").replace(/\/$/, "");
-      packageUrls = new Map();
-      usedSpecifiers.clear();
-      for (const name of [...externalPackages].sort()) {
-        const version = resolvedVersion(dirname(manifestPath), name, declared[name]!);
-        packageUrls.set(name, `${cdn}/${name}@${version}`);
-      }
+      externalPackageNames = new Set(Object.keys(externalDependencies));
 
-      const existing = config.build?.rollupOptions?.external;
+      const cdnBaseUrl = (options.cdn ?? "https://esm.sh").replace(/\/$/, "");
+      packageUrls = createPackageUrls(
+        dirname(manifestPath),
+        externalDependencies,
+        cdnBaseUrl,
+      );
+      usedImportSpecifiers.clear();
+
+      const existingExternalOption = config.build?.rollupOptions?.external;
       return {
         build: {
           rollupOptions: {
-            external(id: string, importer: string | undefined, isResolved: boolean) {
-              const dependency = packageName(applyAliases(id, aliases));
+            external(
+              importId: string,
+              importer: string | undefined,
+              isResolved: boolean,
+            ) {
+              const dependencyName = getPackageName(
+                applyAliases(importId, aliases),
+              );
+
               if (
-                dependency &&
-                externalPackages.has(dependency) &&
-                !isStylesheetImport(id)
+                dependencyName &&
+                externalPackageNames.has(dependencyName) &&
+                !isStylesheetImport(importId)
               ) {
-                usedSpecifiers.add(id);
+                usedImportSpecifiers.add(importId);
                 return true;
               }
-              if (typeof existing === "function") {
-                return existing(id, importer, isResolved);
+
+              if (typeof existingExternalOption === "function") {
+                return existingExternalOption(importId, importer, isResolved);
               }
-              return matchesExternal(existing, id);
+
+              return matchesExternal(existingExternalOption, importId);
             },
           },
         },
@@ -161,58 +97,53 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
     configResolved(config) {
       aliases = config.resolve.alias.flatMap((alias) =>
         typeof alias.find === "string" &&
-        packageName(alias.replacement) &&
-        externalPackages.has(packageName(alias.replacement)!)
+        typeof alias.replacement === "string" &&
+        getPackageName(alias.replacement) &&
+        externalPackageNames.has(getPackageName(alias.replacement)!)
           ? [{ find: alias.find, replacement: alias.replacement }]
           : [],
       );
-      aliasTargets = new Set(aliases.map(({ replacement }) => packageName(replacement)!));
-      const externalNames = new Set(
-        aliases.flatMap(({ find, replacement }) => [packageName(find), packageName(replacement)]),
+
+      aliasTargetNames = new Set(
+        aliases.map(({ replacement }) => getPackageName(replacement)!),
       );
-      for (const singleton of ["react", "react-dom"]) {
-        if (externalPackages.has(singleton)) externalNames.add(singleton);
+
+      const externalDependencyNames = new Set<string>();
+      for (const alias of aliases) {
+        const aliasName = getPackageName(alias.find);
+        const targetName = getPackageName(alias.replacement);
+        if (aliasName) externalDependencyNames.add(aliasName);
+        if (targetName) externalDependencyNames.add(targetName);
       }
-      externalNames.delete(undefined);
-      dependencyQuery = externalNames.size
-        ? `?standalone&external=${[...externalNames].sort().join(",")}`
+
+      for (const singletonName of ["react", "react-dom"]) {
+        if (externalPackageNames.has(singletonName)) {
+          externalDependencyNames.add(singletonName);
+        }
+      }
+
+      dependencyQuery = externalDependencyNames.size
+        ? `?standalone&external=${[...externalDependencyNames].sort().join(",")}`
         : "?standalone";
     },
 
     transformIndexHtml: {
       order: "post",
       handler() {
-        const imports: Record<string, string> = {};
-        for (const specifier of [...usedSpecifiers].sort()) {
-          const target = applyAliases(specifier, aliases);
-          const targetPackage = packageName(target);
-          const baseUrl = targetPackage && packageUrls.get(targetPackage);
-          if (!targetPackage || !baseUrl) continue;
-          imports[specifier] = `${baseUrl}${target.slice(targetPackage.length)}${
-            aliasTargets.has(targetPackage) ? "" : dependencyQuery
-          }`;
-        }
-        for (const { find, replacement } of aliases) {
-          const targetPackage = packageName(replacement)!;
-          const baseUrl = packageUrls.get(targetPackage)!;
-          const targetUrl = `${baseUrl}${replacement.slice(targetPackage.length)}`;
-          imports[targetPackage] ??= baseUrl;
-          imports[`${targetPackage}/`] ??= `${baseUrl}/`;
-          imports[find] = targetUrl;
-          imports[`${find}/`] = `${targetUrl}/`;
-        }
-        if (Object.keys(imports).length === 0) return [];
-        return [
-          {
-            tag: "script",
-            attrs: { type: "importmap", id: "pinestraw-imports" },
-            children: JSON.stringify({ imports }, null, 2),
-            injectTo: "head-prepend",
-          },
-        ];
+        return createImportMapTag({
+          usedSpecifiers: usedImportSpecifiers,
+          packageUrls,
+          aliases,
+          aliasTargets: aliasTargetNames,
+          dependencyQuery,
+        });
       },
     },
   };
+}
+
+function resolveProjectRoot(configuredRoot: string | undefined): string {
+  return resolve(configuredRoot ?? process.cwd());
 }
 
 export { pinestraw };
