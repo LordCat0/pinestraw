@@ -5,7 +5,9 @@
   "keywords": [
     "pinestraw",
     "bundle",
-    "vite"
+    "vite",
+    "esm.sh",
+    "import-map"
   ],
   "license": "GPL-3.0-only",
   "author": "LordCat0",
@@ -14,10 +16,15 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test test/*.test.mjs",
     "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "vite": ">=5.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^7.1.1"
   }
 }
