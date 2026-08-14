@@ -1,5 +1,5 @@
-import { applyAliases, getPackageName } from "./imports.js";
-import type { PackageAlias } from "./types.js";
+import { applyAliases, getPackageName } from './imports.js';
+import type { PackageAlias } from './types.js';
 
 interface ImportMapOptions {
   usedSpecifiers: ReadonlySet<string>;
@@ -14,7 +14,7 @@ export function createImportMapTag({
   packageUrls,
   aliases,
   aliasTargets,
-  dependencyQuery,
+  dependencyQuery
 }: ImportMapOptions) {
   const imports: Record<string, string> = {};
 
@@ -30,9 +30,7 @@ export function createImportMapTag({
     }
 
     const subpath = aliasedSpecifier.slice(targetPackageName.length);
-    const query = aliasTargets.has(targetPackageName)
-      ? ""
-      : dependencyQuery;
+    const query = aliasTargets.has(targetPackageName) ? '' : dependencyQuery;
     imports[importSpecifier] = `${packageUrl}${subpath}${query}`;
   }
 
@@ -40,7 +38,7 @@ export function createImportMapTag({
     const targetPackageName = getPackageName(alias.replacement)!;
     const packageUrl = packageUrls.get(targetPackageName)!;
     const replacementSubpath = alias.replacement.slice(
-      targetPackageName.length,
+      targetPackageName.length
     );
     const targetUrl = `${packageUrl}${replacementSubpath}`;
 
@@ -56,10 +54,10 @@ export function createImportMapTag({
 
   return [
     {
-      tag: "script" as const,
-      attrs: { type: "importmap", id: "pinestraw-imports" },
+      tag: 'script' as const,
+      attrs: { type: 'importmap', id: 'pinestraw-imports' },
       children: JSON.stringify({ imports }, null, 2),
-      injectTo: "head-prepend" as const,
-    },
+      injectTo: 'head-prepend' as const
+    }
   ];
 }

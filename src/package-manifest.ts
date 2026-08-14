@@ -1,18 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import type { PackageManifest } from "./types.js";
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import type { PackageManifest } from './types.js';
 
 export function findPackageJson(startDirectory: string): string {
   let currentDirectory = resolve(startDirectory);
 
   while (true) {
-    const manifestPath = join(currentDirectory, "package.json");
+    const manifestPath = join(currentDirectory, 'package.json');
     if (existsSync(manifestPath)) return manifestPath;
 
     const parentDirectory = dirname(currentDirectory);
     if (parentDirectory === currentDirectory) {
       throw new Error(
-        `[pinestraw] Could not find package.json from ${startDirectory}`,
+        `[pinestraw] Could not find package.json from ${startDirectory}`
       );
     }
 
@@ -21,26 +21,26 @@ export function findPackageJson(startDirectory: string): string {
 }
 
 export function readPackageManifest(manifestPath: string): PackageManifest {
-  return JSON.parse(readFileSync(manifestPath, "utf8")) as PackageManifest;
+  return JSON.parse(readFileSync(manifestPath, 'utf8')) as PackageManifest;
 }
 
 export function resolvePackageVersion(
   projectRoot: string,
   packageName: string,
-  declaredVersion: string,
+  declaredVersion: string
 ): string {
   // Prefer a lockfile-installed version so the browser runs the same dependency
   // that the application was developed and tested against.
   const packageManifestPath = join(
     projectRoot,
-    "node_modules",
-    ...packageName.split("/"),
-    "package.json",
+    'node_modules',
+    ...packageName.split('/'),
+    'package.json'
   );
 
   if (existsSync(packageManifestPath)) {
     const installedPackage = JSON.parse(
-      readFileSync(packageManifestPath, "utf8"),
+      readFileSync(packageManifestPath, 'utf8')
     ) as { version?: string };
 
     if (installedPackage.version) return installedPackage.version;
@@ -48,13 +48,11 @@ export function resolvePackageVersion(
 
   // npm aliases and local/workspace dependencies are not valid esm.sh versions.
   if (
-    /^(?:file:|link:|workspace:|git(?:\+|:)|https?:|npm:)/.test(
-      declaredVersion,
-    )
+    /^(?:file:|link:|workspace:|git(?:\+|:)|https?:|npm:)/.test(declaredVersion)
   ) {
     throw new Error(
       `[pinestraw] Cannot create an esm.sh URL for ${packageName}@${declaredVersion}. ` +
-        "Install it in node_modules or exclude it.",
+        'Install it in node_modules or exclude it.'
     );
   }
 
@@ -64,7 +62,7 @@ export function resolvePackageVersion(
 export function createPackageUrls(
   projectRoot: string,
   dependencies: Readonly<Record<string, string>>,
-  cdnBaseUrl: string,
+  cdnBaseUrl: string
 ): Map<string, string> {
   const packageUrls = new Map<string, string>();
 
@@ -73,11 +71,11 @@ export function createPackageUrls(
     const resolvedVersion = resolvePackageVersion(
       projectRoot,
       packageName,
-      declaredVersion,
+      declaredVersion
     );
     packageUrls.set(
       packageName,
-      `${cdnBaseUrl}/${packageName}@${resolvedVersion}`,
+      `${cdnBaseUrl}/${packageName}@${resolvedVersion}`
     );
   }
 

@@ -26,5 +26,5 @@ export type ExternalOption =
   | ((
       id: string,
       importer: string | undefined,
-      isResolved: boolean,
+      isResolved: boolean
     ) => boolean | null | undefined);

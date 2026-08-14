@@ -1,39 +1,37 @@
-import { dirname, resolve } from "node:path";
-import type { Plugin } from "vite";
-import { createImportMapTag } from "./import-map.js";
+import { dirname, resolve } from 'node:path';
+import type { Plugin } from 'vite';
+import { createImportMapTag } from './import-map.js';
 import {
   applyAliases,
   getPackageName,
   isStylesheetImport,
-  matchesExternal,
-} from "./imports.js";
+  matchesExternal
+} from './imports.js';
 import {
   createPackageUrls,
   findPackageJson,
-  readPackageManifest,
-} from "./package-manifest.js";
-import type { PackageAlias, PinestrawOptions } from "./types.js";
+  readPackageManifest
+} from './package-manifest.js';
+import type { PackageAlias, PinestrawOptions } from './types.js';
 
-export type { PinestrawOptions } from "./types.js";
+export type { PinestrawOptions } from './types.js';
 
 /**
  * Keeps application dependencies out of Vite's output and resolves them in the
  * browser through an import map backed by esm.sh.
  */
-export default function pinestraw(
-  options: PinestrawOptions = {},
-): Plugin {
+export default function pinestraw(options: PinestrawOptions = {}): Plugin {
   let externalPackageNames = new Set<string>();
   let packageUrls = new Map<string, string>();
   let aliases: PackageAlias[] = [];
   let aliasTargetNames = new Set<string>();
-  let dependencyQuery = "?standalone";
+  let dependencyQuery = '?standalone';
   const usedImportSpecifiers = new Set<string>();
 
   return {
-    name: "pinestraw",
-    apply: "build",
-    enforce: "pre",
+    name: 'pinestraw',
+    apply: 'build',
+    enforce: 'pre',
 
     config(config) {
       const projectRoot = resolveProjectRoot(config.root);
@@ -42,22 +40,22 @@ export default function pinestraw(
       const declaredDependencies = {
         ...manifest.dependencies,
         ...(options.peerDependencies ? manifest.peerDependencies : {}),
-        ...options.include,
+        ...options.include
       };
       const excludedPackageNames = new Set(options.exclude ?? []);
       const externalDependencies = Object.fromEntries(
         Object.entries(declaredDependencies).filter(
-          ([packageName]) => !excludedPackageNames.has(packageName),
-        ),
+          ([packageName]) => !excludedPackageNames.has(packageName)
+        )
       );
 
       externalPackageNames = new Set(Object.keys(externalDependencies));
 
-      const cdnBaseUrl = (options.cdn ?? "https://esm.sh").replace(/\/$/, "");
+      const cdnBaseUrl = (options.cdn ?? 'https://esm.sh').replace(/\/$/, '');
       packageUrls = createPackageUrls(
         dirname(manifestPath),
         externalDependencies,
-        cdnBaseUrl,
+        cdnBaseUrl
       );
       usedImportSpecifiers.clear();
 
@@ -68,10 +66,10 @@ export default function pinestraw(
             external(
               importId: string,
               importer: string | undefined,
-              isResolved: boolean,
+              isResolved: boolean
             ) {
               const dependencyName = getPackageName(
-                applyAliases(importId, aliases),
+                applyAliases(importId, aliases)
               );
 
               if (
@@ -83,29 +81,29 @@ export default function pinestraw(
                 return true;
               }
 
-              if (typeof existingExternalOption === "function") {
+              if (typeof existingExternalOption === 'function') {
                 return existingExternalOption(importId, importer, isResolved);
               }
 
               return matchesExternal(existingExternalOption, importId);
-            },
-          },
-        },
+            }
+          }
+        }
       };
     },
 
     configResolved(config) {
       aliases = config.resolve.alias.flatMap((alias) =>
-        typeof alias.find === "string" &&
-        typeof alias.replacement === "string" &&
+        typeof alias.find === 'string' &&
+        typeof alias.replacement === 'string' &&
         getPackageName(alias.replacement) &&
         externalPackageNames.has(getPackageName(alias.replacement)!)
           ? [{ find: alias.find, replacement: alias.replacement }]
-          : [],
+          : []
       );
 
       aliasTargetNames = new Set(
-        aliases.map(({ replacement }) => getPackageName(replacement)!),
+        aliases.map(({ replacement }) => getPackageName(replacement)!)
       );
 
       const externalDependencyNames = new Set<string>();
@@ -116,29 +114,30 @@ export default function pinestraw(
         if (targetName) externalDependencyNames.add(targetName);
       }
 
-      for (const singletonName of ["react", "react-dom"]) {
+      // todo: unhardcode these
+      for (const singletonName of ['react', 'react-dom']) {
         if (externalPackageNames.has(singletonName)) {
           externalDependencyNames.add(singletonName);
         }
       }
 
       dependencyQuery = externalDependencyNames.size
-        ? `?standalone&external=${[...externalDependencyNames].sort().join(",")}`
-        : "?standalone";
+        ? `?standalone&external=${[...externalDependencyNames].sort().join(',')}`
+        : '?standalone';
     },
 
     transformIndexHtml: {
-      order: "post",
+      order: 'post',
       handler() {
         return createImportMapTag({
           usedSpecifiers: usedImportSpecifiers,
           packageUrls,
           aliases,
           aliasTargets: aliasTargetNames,
-          dependencyQuery,
+          dependencyQuery
         });
-      },
-    },
+      }
+    }
   };
 }
 
