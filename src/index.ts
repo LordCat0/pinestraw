@@ -104,7 +104,7 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
   let packageUrls = new Map<string, string>();
   let aliases: PackageAlias[] = [];
   let aliasTargets = new Set<string>();
-  let externalQuery = "";
+  let dependencyQuery = "?standalone";
   const usedSpecifiers = new Set<string>();
 
   return {
@@ -174,9 +174,9 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
         if (externalPackages.has(singleton)) externalNames.add(singleton);
       }
       externalNames.delete(undefined);
-      externalQuery = externalNames.size
-        ? `?external=${[...externalNames].sort().join(",")}`
-        : "";
+      dependencyQuery = externalNames.size
+        ? `?standalone&external=${[...externalNames].sort().join(",")}`
+        : "?standalone";
     },
 
     transformIndexHtml: {
@@ -189,7 +189,7 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
           const baseUrl = targetPackage && packageUrls.get(targetPackage);
           if (!targetPackage || !baseUrl) continue;
           imports[specifier] = `${baseUrl}${target.slice(targetPackage.length)}${
-            aliasTargets.has(targetPackage) ? "" : externalQuery
+            aliasTargets.has(targetPackage) ? "" : dependencyQuery
           }`;
         }
         for (const { find, replacement } of aliases) {

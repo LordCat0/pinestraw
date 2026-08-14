@@ -30,6 +30,12 @@ Given `react` in `dependencies`, a production build contains mappings like:
 </script>
 ```
 
+Each CDN dependency is requested in esm.sh's standalone mode. Its transitive
+dependencies are bundled into the CDN module while shared framework packages
+such as React, React DOM, and configured aliases remain external and resolve
+through the same import map. This prevents component libraries from loading a
+second framework instance.
+
 The trailing-slash entry supports package subpaths such as `react/jsx-runtime`.
 Installed exact versions are preferred; otherwise the range from `package.json`
 is used. Development mode is untouched and continues to use Vite normally.
