@@ -25,9 +25,14 @@ type ExternalOption =
   | ((id: string, importer: string | undefined, isResolved: boolean) => boolean | null | undefined);
 
 const bareImport = /^(?![./]|[a-zA-Z][a-zA-Z\d+.-]*:)(@[^/]+\/[^/]+|[^/]+)/;
+const stylesheetImport = /\.(?:css|less|sass|scss|styl|stylus|pcss|postcss)$/i;
 
 function packageName(id: string): string | undefined {
   return bareImport.exec(id)?.[1];
+}
+
+function isStylesheetImport(id: string): boolean {
+  return stylesheetImport.test(id.split(/[?#]/, 1)[0] ?? id);
 }
 
 function findPackageJson(start: string): string {
@@ -118,7 +123,13 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
           rollupOptions: {
             external(id: string, importer: string | undefined, isResolved: boolean) {
               const dependency = packageName(id);
-              if (dependency && externalPackages.has(dependency)) return true;
+              if (
+                dependency &&
+                externalPackages.has(dependency) &&
+                !isStylesheetImport(id)
+              ) {
+                return true;
+              }
               if (typeof existing === "function") {
                 return existing(id, importer, isResolved);
               }
@@ -136,7 +147,7 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
         return [
           {
             tag: "script",
-            attrs: { type: "importmap", id: 'pinestraw-imports' },
+            attrs: { type: "importmap", id: "pinestraw-imports" },
             children: JSON.stringify({ imports }, null, 2),
             injectTo: "head-prepend",
           },

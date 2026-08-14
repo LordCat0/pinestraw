@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,13 +10,31 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   const root = await mkdtemp(join(tmpdir(), "pinestraw-"));
   await writeFile(
     join(root, "package.json"),
-    JSON.stringify({ type: "module", dependencies: { react: "^19.0.0" } }),
+    JSON.stringify({
+      type: "module",
+      dependencies: {
+        react: "^19.0.0",
+        "react-loading-skeleton": "^3.5.0",
+      },
+    }),
   );
   await writeFile(
     join(root, "index.html"),
     '<main id="app"></main><script type="module" src="/main.js"></script>',
   );
-  await writeFile(join(root, "main.js"), 'import React from "react"; console.log(React);');
+
+  // Real example from one of my projects I tested it on
+  await writeFile(
+    join(root, "main.js"),
+    'import React from "react"; import "react-loading-skeleton/dist/skeleton.css"; console.log(React);',
+  );
+  const skeletonRoot = join(root, "node_modules/react-loading-skeleton");
+  await mkdir(join(skeletonRoot, "dist"), { recursive: true });
+  await writeFile(
+    join(skeletonRoot, "package.json"),
+    JSON.stringify({ name: "react-loading-skeleton", version: "3.5.0" }),
+  );
+  await writeFile(join(skeletonRoot, "dist/skeleton.css"), ".skeleton { color: red; }");
 
   const previousDirectory = process.cwd();
   try {
@@ -29,11 +47,17 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   const html = await readFile(join(root, "dist/index.html"), "utf8");
   const assets = await readdir(join(root, "dist/assets"));
   const js = await readFile(join(root, "dist/assets", assets.find((file) => file.endsWith(".js"))), "utf8");
+  const css = await readFile(
+    join(root, "dist/assets", assets.find((file) => file.endsWith(".css"))),
+    "utf8",
+  );
 
-  assert.match(html, /<script type="importmap">/);
+  assert.match(html, /<script type="importmap" id="pinestraw-imports">/);
   assert.match(html, /"react":\s*"https:\/\/esm\.sh\/react@\^19\.0\.0"/);
   assert.match(html, /"react\/":\s*"https:\/\/esm\.sh\/react@\^19\.0\.0\/"/);
   assert.match(js, /from["']react["']/);
+  assert.doesNotMatch(js, /skeleton\.css/);
+  assert.match(css, /\.skeleton\{color:red\}/);
 
   await rm(root, { recursive: true, force: true });
 });
