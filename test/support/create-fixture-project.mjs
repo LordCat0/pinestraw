@@ -11,6 +11,7 @@ export async function createFixtureProject() {
       type: "module",
       dependencies: {
         preact: "^10.0.0",
+        "react-dom": "^19.1.1",
         "react-loading-skeleton": "^3.5.0",
       },
     }),
@@ -23,10 +24,11 @@ export async function createFixtureProject() {
     join(projectRoot, "main.js"),
     [
       'import React from "react";',
+      'import { createRoot } from "react-dom/client";',
       'import { useState } from "preact/hooks";',
       'import Skeleton from "react-loading-skeleton";',
       'import "react-loading-skeleton/dist/skeleton.css";',
-      "console.log(React, useState, Skeleton);",
+      "console.log(React, createRoot, useState, Skeleton);",
     ].join(" "),
   );
 

@@ -118,6 +118,7 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
       for (const singletonName of ['react', 'react-dom']) {
         if (externalPackageNames.has(singletonName)) {
           externalDependencyNames.add(singletonName);
+          usedImportSpecifiers.add(singletonName);
         }
       }
 

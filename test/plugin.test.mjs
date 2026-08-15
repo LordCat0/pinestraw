@@ -24,9 +24,14 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
     assert.doesNotMatch(html, /preact@\^10\.0\.0\/hooks\?external/);
     assert.match(
       html,
-      /react-loading-skeleton@3\.5\.0\?standalone&external=preact,react/,
+      /react-loading-skeleton@3\.5\.0\?standalone&external=preact,react,react-dom/,
+    );
+    assert.match(
+      html,
+      /"react-dom":\s*"https:\/\/esm\.sh\/react-dom@\^19\.1\.1\?standalone&external=preact,react,react-dom"/,
     );
     assert.match(javascript, /from["']react["']/);
+    assert.match(javascript, /from["']react-dom\/client["']/);
     assert.match(javascript, /from["']preact\/hooks["']/);
     assert.doesNotMatch(javascript, /skeleton\.css/);
     assert.match(stylesheet, /\.skeleton\{color:red\}/);
