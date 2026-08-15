@@ -31,13 +31,6 @@ jobs:
       - run: npm ci
       - name: Publish package
         run: |
-          version=$(node -p "require('./package.json').version")
-          if [[ "$version" == *-* ]]; then
-            tag="${version#*-}"
-            tag="${tag%%.*}"
-            npm publish --tag "$tag"
-          else
-            npm publish
-          fi
+          npm publish --tag latest
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}
