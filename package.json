@@ -1,6 +1,6 @@
 {
   "name": "pinestraw",
-  "version": "0.1.1-alpha",
+  "version": "1.0.0",
   "description": "Bundle your app's dependencies with script tags in the HTML.",
   "keywords": [
     "pinestraw",
