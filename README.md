@@ -36,15 +36,11 @@ such as React, React DOM, and configured aliases remain external and resolve
 through the same import map. This prevents component libraries from loading a
 second framework instance.
 
-The trailing-slash entry supports package subpaths such as `react/jsx-runtime`.
-Installed exact versions are preferred; otherwise the range from `package.json`
-is used. Development mode is untouched and continues to use Vite normally.
-
 ## Options
 
 ```ts
 pinestraw({
-  include: { preact: "10.27.0" }, // additional packages
+  include: ["preact"], // additional packages
   exclude: ["large-local-package"], // leave these in Vite's bundle
   peerDependencies: true, // default: false
   cdn: "https://esm.sh", // may point to a self-hosted instance
@@ -54,3 +50,7 @@ pinestraw({
 Packages declared with `file:`, `link:`, `workspace:`, Git, HTTP, or npm alias
 specifiers must be installed locally (so their concrete version can be read) or
 excluded.
+
+Included packages use their installed version when available, or their declared
+version from `dependencies`, `devDependencies`, `optionalDependencies`, or
+`peerDependencies`.

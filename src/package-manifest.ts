@@ -27,7 +27,7 @@ export function readPackageManifest(manifestPath: string): PackageManifest {
 export function resolvePackageVersion(
   projectRoot: string,
   packageName: string,
-  declaredVersion: string
+  declaredVersion: string | undefined
 ): string {
   // Prefer a lockfile-installed version so the browser runs the same dependency
   // that the application was developed and tested against.
@@ -46,6 +46,13 @@ export function resolvePackageVersion(
     if (installedPackage.version) return installedPackage.version;
   }
 
+  if (declaredVersion === undefined) {
+    throw new Error(
+      `[pinestraw] Cannot determine a version for included package ${packageName}. ` +
+        'Install it in node_modules or declare it in package.json.'
+    );
+  }
+
   // npm aliases and local/workspace dependencies are not valid esm.sh versions.
   if (
     /^(?:file:|link:|workspace:|git(?:\+|:)|https?:|npm:)/.test(declaredVersion)
@@ -61,7 +68,7 @@ export function resolvePackageVersion(
 
 export function createPackageUrls(
   projectRoot: string,
-  dependencies: Readonly<Record<string, string>>,
+  dependencies: Readonly<Record<string, string | undefined>>,
   cdnBaseUrl: string
 ): Map<string, string> {
   const packageUrls = new Map<string, string>();

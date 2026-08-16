@@ -37,12 +37,22 @@ export default function pinestraw(options: PinestrawOptions = {}): Plugin {
       const projectRoot = resolveProjectRoot(config.root);
       const manifestPath = findPackageJson(projectRoot);
       const manifest = readPackageManifest(manifestPath);
-      const declaredDependencies = {
+      const declaredDependencies: Record<string, string | undefined> = {
         ...manifest.dependencies,
-        ...(options.peerDependencies ? manifest.peerDependencies : {}),
-        ...options.include
+        ...(options.peerDependencies ? manifest.peerDependencies : {})
       };
-      const excludedPackageNames = new Set(options.exclude ?? []);
+      const availableVersions = {
+        ...manifest.devDependencies,
+        ...manifest.optionalDependencies,
+        ...manifest.peerDependencies,
+        ...manifest.dependencies
+      };
+
+      for (const packageName of options.include || []) {
+        declaredDependencies[packageName] = availableVersions[packageName];
+      }
+
+      const excludedPackageNames = new Set(options.exclude || []);
       const externalDependencies = Object.fromEntries(
         Object.entries(declaredDependencies).filter(
           ([packageName]) => !excludedPackageNames.has(packageName)

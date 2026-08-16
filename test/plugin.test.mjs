@@ -39,3 +39,16 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
+
+test("includes additional packages by package name", async () => {
+  const projectRoot = await createFixtureProject();
+
+  try {
+    await buildFixtureProject(projectRoot, { include: ["preact"] });
+    const { html } = await readBuildOutput(projectRoot);
+
+    assert.match(html, /"preact":\s*"https:\/\/esm\.sh\/preact@\^10\.0\.0"/);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});

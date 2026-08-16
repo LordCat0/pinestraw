@@ -1,6 +1,6 @@
 export interface PinestrawOptions {
-  /** Packages to add in addition to the app's dependencies. Values are versions. */
-  include?: Record<string, string>;
+  /** Package names to add in addition to the app's dependencies. */
+  include?: string[];
   /** Package names which should still be bundled by Vite. */
   exclude?: string[];
   /** Also serve peer dependencies from esm.sh. Defaults to false. */
@@ -11,6 +11,8 @@ export interface PinestrawOptions {
 
 export interface PackageManifest {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 }
 
