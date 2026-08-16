@@ -1,5 +1,9 @@
 # pinestraw
 
+> [!WARNING]
+> This plugin is unstable may potentially not work with some libraries.
+> We're looking into some of these obscure errors to see if there's anything that can be done about it
+
 A Vite plugin that keeps application dependencies out of your JavaScript bundle
 and loads them from [esm.sh](https://esm.sh/) using an HTML import map.
 
