@@ -40,7 +40,7 @@ second framework instance.
 
 ```ts
 pinestraw({
-  include: ["preact"], // additional packages
+  include: ["preact"], // only serve these packages from esm.sh
   exclude: ["large-local-package"], // leave these in Vite's bundle
   peerDependencies: true, // default: false
   cdn: "https://esm.sh", // may point to a self-hosted instance
@@ -51,6 +51,7 @@ Packages declared with `file:`, `link:`, `workspace:`, Git, HTTP, or npm alias
 specifiers must be installed locally (so their concrete version can be read) or
 excluded.
 
-Included packages use their installed version when available, or their declared
-version from `dependencies`, `devDependencies`, `optionalDependencies`, or
-`peerDependencies`.
+By default, all dependencies are included. When `include` is set, only those
+package names are served from esm.sh. Included packages use their installed
+version when available, or their declared version from `dependencies`,
+`devDependencies`, `optionalDependencies`, or `peerDependencies`.

@@ -1,5 +1,5 @@
 export interface PinestrawOptions {
-  /** Package names to add in addition to the app's dependencies. */
+  /** Package names to serve from esm.sh. Defaults to all app dependencies. */
   include?: string[];
   /** Package names which should still be bundled by Vite. */
   exclude?: string[];

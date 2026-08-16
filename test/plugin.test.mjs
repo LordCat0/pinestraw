@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import test from "node:test";
+import pinestraw from "../dist/index.js";
 import { buildFixtureProject } from "./support/build-fixture-project.mjs";
 import { createFixtureProject } from "./support/create-fixture-project.mjs";
 import { readBuildOutput } from "./support/read-build-output.mjs";
@@ -40,14 +41,18 @@ test("externalizes dependencies and injects an esm.sh import map", async () => {
   }
 });
 
-test("includes additional packages by package name", async () => {
+test("only externalizes package names in include", async () => {
   const projectRoot = await createFixtureProject();
 
   try {
-    await buildFixtureProject(projectRoot, { include: ["preact"] });
-    const { html } = await readBuildOutput(projectRoot);
+    const plugin = pinestraw({ include: ["preact"] });
+    const configured = plugin.config({ root: projectRoot });
+    const external = configured.build.rollupOptions.external;
 
-    assert.match(html, /"preact":\s*"https:\/\/esm\.sh\/preact@\^10\.0\.0"/);
+    assert.equal(external("preact", undefined, false), true);
+    assert.equal(external("preact/hooks", undefined, false), true);
+    assert.equal(external("react-dom/client", undefined, false), false);
+    assert.equal(external("react-loading-skeleton", undefined, false), false);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
